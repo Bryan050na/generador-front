@@ -4,22 +4,34 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
+import { createUserWithEmailAndPassword } from "firebase/auth"
+import { auth } from "@/lib/firebase"
 
 export default function Register() {
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showCard, setShowCard] = useState(false)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Username:", username)
-    console.log("Email:", email)
-    console.log("Password:", password)
+    setError("")
+    setSuccess("")
+
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+      console.log("Usuario registrado:", userCredential.user)
+
+      setSuccess("¡Cuenta creada exitosamente!")
+      // Aquí puedes redirigir, por ejemplo, a login o dashboard
+    } catch (err: any) {
+      setError(err.message)
+    }
   }
 
   useEffect(() => {
-    // Hacemos que la tarjeta de registro se muestre con animación después de que el componente se haya montado
     setShowCard(true)
   }, [])
 
@@ -49,7 +61,7 @@ export default function Register() {
                 placeholder="Nombre de usuario"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="rounded-3xl border-none bg-gray-400 bg-opacity-50 px-6 py-2 text-center text-inherit placeholder-slate-200 shadow-lg outline-none backdrop-blur-md"
+                className="rounded-3xl border-none bg-gray-400 bg-opacity-50 px-6 py-2 text-center placeholder-slate-200 shadow-lg outline-none backdrop-blur-md"
               />
             </div>
 
@@ -60,7 +72,7 @@ export default function Register() {
                 placeholder="id@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="rounded-3xl border-none bg-gray-400 bg-opacity-50 px-6 py-2 text-center text-inherit placeholder-slate-200 shadow-lg outline-none backdrop-blur-md"
+                className="rounded-3xl border-none bg-gray-400 bg-opacity-50 px-6 py-2 text-center placeholder-slate-200 shadow-lg outline-none backdrop-blur-md"
               />
             </div>
 
@@ -71,9 +83,12 @@ export default function Register() {
                 placeholder="*********"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="rounded-3xl border-none bg-gray-400 bg-opacity-50 px-6 py-2 text-center text-inherit placeholder-slate-200 shadow-lg outline-none backdrop-blur-md"
+                className="rounded-3xl border-none bg-gray-400 bg-opacity-50 px-6 py-2 text-center placeholder-slate-200 shadow-lg outline-none backdrop-blur-md"
               />
             </div>
+
+            {error && <p className="text-red-400 text-center mb-2">{error}</p>}
+            {success && <p className="text-green-400 text-center mb-2">{success}</p>}
 
             <div className="mt-8 flex justify-center text-lg text-black">
               <button
@@ -84,7 +99,6 @@ export default function Register() {
               </button>
             </div>
           </form>
-          {/* Texto debajo del formulario */}
           <div className="mt-6 text-center text-gray-300">
             <span>¿Ya tienes cuenta?</span>
             <Link href="/" className="ml-2 text-gray-400 hover:text-gray-700 transition-colors duration-300">

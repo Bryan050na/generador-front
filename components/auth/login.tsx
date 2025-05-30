@@ -4,16 +4,29 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
+import { useRouter } from "next/navigation"
+import { signInWithEmailAndPassword } from "firebase/auth"
+import { auth } from "@/lib/firebase"
 
 export default function Login() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
   const [showCard, setShowCard] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const router = useRouter()
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Email:", email)
-    console.log("Password:", password)
+    setError("")
+
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      console.log("Usuario logueado:", userCredential.user)
+      router.push("/home") // Redirige al usuario
+    } catch (err: any) {
+      setError("Credenciales incorrectas o usuario no existe.")
+    }
   }
 
   useEffect(() => {
@@ -61,18 +74,17 @@ export default function Login() {
               />
             </div>
 
+            {error && <p className="text-red-400 text-center mb-2">{error}</p>}
+
             <div className="mt-8 flex justify-center text-lg text-black">
-              <Link href="/home">
-                <button
-                  type="submit"
-                  className="rounded-3xl bg-gray-400 bg-opacity-50 px-10 py-2 text-white shadow-xl backdrop-blur-md transition-colors duration-300 hover:bg-gray-700"
-                >
-                  Iniciar sesión
-                </button>
-              </Link>
+              <button
+                type="submit"
+                className="rounded-3xl bg-gray-400 bg-opacity-50 px-10 py-2 text-white shadow-xl backdrop-blur-md transition-colors duration-300 hover:bg-gray-700"
+              >
+                Iniciar sesión
+              </button>
             </div>
           </form>
-          {/* Texto debajo del formulario */}
           <div className="mt-6 text-center text-gray-300">
             <span>¿Aún no tienes cuenta?</span>
             <Link href="/register" className="ml-2 text-gray-400 hover:text-gray-700 transition-colors duration-300">
