@@ -1,30 +1,47 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef, useEffect } from "react"
-import { ClassNodeSidebar } from "./class-node-sidebar"
+import { PackageNodeSidebar } from "./package-node-sidebar"
 import { ClassNode } from "./class-node"
+import { PackageNode } from "./package-node"
 import { RelationshipLine } from "./relationship-line"
-import type { ClassNodeData, DiagramData, Relationship } from "@/types/diagram-types"
+import { PackageClassLine } from "./package-class-line"
+import type {
+  ClassNodeData,
+  PackageNodeData,
+  DiagramData,
+  Relationship,
+  PackageClassRelation,
+  ExportProject,
+  ExportPackage,
+} from "@/types/diagram-types"
 import { Button } from "@/components/ui/button"
-import { Download, Upload, Trash2, ZoomIn, ZoomOut, MousePointer, Lock, Unlock } from "lucide-react"
+import { Download, Upload, Trash2, ZoomIn, ZoomOut, MousePointer, Lock, Unlock, Link } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Input } from "@/components/ui/input"
 
-export function SimpleDiagramEditor() {
+export function EnhancedDiagramEditor() {
   const [classes, setClasses] = useState<ClassNodeData[]>([])
+  const [packages, setPackages] = useState<PackageNodeData[]>([])
   const [relationships, setRelationships] = useState<Relationship[]>([])
+  const [packageClassRelations, setPackageClassRelations] = useState<PackageClassRelation[]>([])
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null)
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
   const [selectedRelationshipId, setSelectedRelationshipId] = useState<string | null>(null)
+  const [selectedPackageClassId, setSelectedPackageClassId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [scale, setScale] = useState(1)
   const [relationMode, setRelationMode] = useState(false)
+  const [packageClassMode, setPackageClassMode] = useState(false)
   const [relationSource, setRelationSource] = useState<string | null>(null)
   const [isLocked, setIsLocked] = useState(false)
   const [showRelationDialog, setShowRelationDialog] = useState(false)
+  const [showExportDialog, setShowExportDialog] = useState(false)
+  const [projectName, setProjectName] = useState("Mi Proyecto")
   const [newRelationship, setNewRelationship] = useState<{
     source: string
     target: string
@@ -42,7 +59,9 @@ export function SimpleDiagramEditor() {
   const handleCanvasClick = () => {
     if (!isLocked) {
       setSelectedClassId(null)
+      setSelectedPackageId(null)
       setSelectedRelationshipId(null)
+      setSelectedPackageClassId(null)
     }
   }
 
@@ -51,9 +70,7 @@ export function SimpleDiagramEditor() {
     if (isLocked) return
 
     if (relationMode && relationSource) {
-      // Create relationship
       if (relationSource !== id) {
-        // Mostrar diálogo para seleccionar tipo de relación
         setNewRelationship({
           source: relationSource,
           target: id,
@@ -61,17 +78,85 @@ export function SimpleDiagramEditor() {
         })
         setShowRelationDialog(true)
       }
+    } else if (packageClassMode && relationSource) {
+      // Crear relación paquete-clase
+      if (relationSource !== id) {
+        const isPackageSource = packages.find((p) => p.id === relationSource)
+        if (isPackageSource) {
+          const newRelation: PackageClassRelation = {
+            id: `pkg_cls_${Date.now()}`,
+            packageId: relationSource,
+            classId: id,
+          }
+          setPackageClassRelations([...packageClassRelations, newRelation])
+        }
+        setPackageClassMode(false)
+        setRelationSource(null)
+      }
     } else {
       setSelectedClassId(id)
+      setSelectedPackageId(null)
       setSelectedRelationshipId(null)
+      setSelectedPackageClassId(null)
 
-      if (relationMode) {
+      if (relationMode || packageClassMode) {
         setRelationSource(id)
       }
     }
   }
 
-  // Crear relación después de seleccionar el tipo
+  // Handle package selection
+  const handleSelectPackage = (id: string) => {
+    if (isLocked) return
+
+    if (packageClassMode && relationSource) {
+      // Crear relación paquete-clase
+      if (relationSource !== id) {
+        const isClassSource = classes.find((c) => c.id === relationSource)
+        if (isClassSource) {
+          const newRelation: PackageClassRelation = {
+            id: `pkg_cls_${Date.now()}`,
+            packageId: id,
+            classId: relationSource,
+          }
+          setPackageClassRelations([...packageClassRelations, newRelation])
+        }
+        setPackageClassMode(false)
+        setRelationSource(null)
+      }
+    } else {
+      setSelectedPackageId(id)
+      setSelectedClassId(null)
+      setSelectedRelationshipId(null)
+      setSelectedPackageClassId(null)
+
+      if (packageClassMode) {
+        setRelationSource(id)
+      }
+    }
+  }
+
+  // Handle relationship selection
+  const handleSelectRelationship = (id: string) => {
+    if (!isLocked) {
+      setSelectedRelationshipId(id)
+      setSelectedClassId(null)
+      setSelectedPackageId(null)
+      setSelectedPackageClassId(null)
+    }
+  }
+
+  // Handle package-class relation selection
+  const handleSelectPackageClass = (id: string) => {
+    if (!isLocked) {
+      setSelectedPackageClassId(id)
+      setSelectedClassId(null)
+      setSelectedPackageId(null)
+      setSelectedRelationshipId(null)
+    }
+  }
+
+  // Create relationship
   const handleCreateRelationship = () => {
     const relationship: Relationship = {
       id: `rel_${Date.now()}`,
@@ -86,18 +171,17 @@ export function SimpleDiagramEditor() {
     setShowRelationDialog(false)
   }
 
-  // Handle relationship selection
-  const handleSelectRelationship = (id: string) => {
-    if (!isLocked) {
-      setSelectedRelationshipId(id)
-      setSelectedClassId(null)
-    }
-  }
-
   // Handle class update
   const handleUpdateClass = (updatedClass: ClassNodeData) => {
     if (!isLocked) {
       setClasses(classes.map((c) => (c.id === updatedClass.id ? updatedClass : c)))
+    }
+  }
+
+  // Handle package update
+  const handleUpdatePackage = (updatedPackage: PackageNodeData) => {
+    if (!isLocked) {
+      setPackages(packages.map((p) => (p.id === updatedPackage.id ? updatedPackage : p)))
     }
   }
 
@@ -112,9 +196,18 @@ export function SimpleDiagramEditor() {
   const handleDeleteClass = (id: string) => {
     if (!isLocked) {
       setClasses(classes.filter((c) => c.id !== id))
-      // Also delete relationships connected to this class
       setRelationships(relationships.filter((r) => r.source !== id && r.target !== id))
+      setPackageClassRelations(packageClassRelations.filter((r) => r.classId !== id))
       setSelectedClassId(null)
+    }
+  }
+
+  // Handle package deletion
+  const handleDeletePackage = (id: string) => {
+    if (!isLocked) {
+      setPackages(packages.filter((p) => p.id !== id))
+      setPackageClassRelations(packageClassRelations.filter((r) => r.packageId !== id))
+      setSelectedPackageId(null)
     }
   }
 
@@ -126,7 +219,15 @@ export function SimpleDiagramEditor() {
     }
   }
 
-  // Handle drag over for dropping new classes
+  // Handle package-class relation deletion
+  const handleDeletePackageClassRelation = (id: string) => {
+    if (!isLocked) {
+      setPackageClassRelations(packageClassRelations.filter((r) => r.id !== id))
+      setSelectedPackageClassId(null)
+    }
+  }
+
+  // Handle drag over
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     if (!isLocked) {
       e.preventDefault()
@@ -134,81 +235,146 @@ export function SimpleDiagramEditor() {
     }
   }
 
-  // Handle drop for new classes
+  // Handle drop
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     if (isLocked) return
 
     e.preventDefault()
 
     const nodeType = e.dataTransfer.getData("application/diagramainador")
-
-    if (nodeType !== "classNode" || !canvasRef.current) return
+    if (!canvasRef.current) return
 
     const canvasRect = canvasRef.current.getBoundingClientRect()
     const x = (e.clientX - canvasRect.left) / scale
     const y = (e.clientY - canvasRect.top) / scale
 
-    const newClass: ClassNodeData = {
-      id: `class_${Date.now()}`,
-      name: `Clase${classes.length + 1}`,
-      attributes: [{ name: "atributo1", type: "String", visibility: "public" }],
-      methods: [{ name: "metodo1", returnType: "void", parameters: [], visibility: "public" }],
-      position: { x, y },
-    }
+    if (nodeType === "classNode") {
+      const newClass: ClassNodeData = {
+        id: `class_${Date.now()}`,
+        name: `Clase${classes.length + 1}`,
+        attributes: [{ name: "atributo1", type: "String", visibility: "public" }],
+        methods: [{ name: "metodo1", returnType: "void", parameters: [], visibility: "public" }],
+        position: { x, y },
+        isEntity: true,
+        fields: [{ name: "id", type: "Long", isIdField: true, generationStrategy: "AUTO" }],
+        relationships: [],
+      }
 
-    setClasses([...classes, newClass])
+      setClasses([...classes, newClass])
+    } else if (nodeType === "packageNode") {
+      const newPackage: PackageNodeData = {
+        id: `package_${Date.now()}`,
+        name: `Paquete${packages.length + 1}`,
+        position: { x, y },
+        size: { width: 250, height: 150 }, // Tamaño inicial más grande
+      }
+
+      setPackages([...packages, newPackage])
+    }
   }
 
-  // Handle mouse down for dragging classes
-  const handleMouseDown = (e: React.MouseEvent, classId: string) => {
-    if (isLocked || selectedClassId !== classId) return
+  // Handle mouse down for dragging (evitar interferencia con resize)
+  const handleMouseDown = (e: React.MouseEvent, itemId: string, itemType: "class" | "package") => {
+    if (isLocked) return
+
+    // Verificar si el click fue en un handle de resize
+    const target = e.target as HTMLElement
+    if (target.style.cursor && target.style.cursor.includes("resize")) {
+      return // No iniciar drag si es un handle de resize
+    }
 
     e.preventDefault()
     setIsDragging(true)
 
-    const selectedClass = classes.find((c) => c.id === classId)
-    if (!selectedClass || !canvasRef.current) return
+    if (!canvasRef.current) return
 
     const canvasRect = canvasRef.current.getBoundingClientRect()
-    const offsetX = (e.clientX - canvasRect.left) / scale - selectedClass.position.x
-    const offsetY = (e.clientY - canvasRect.top) / scale - selectedClass.position.y
 
-    setDragOffset({ x: offsetX, y: offsetY })
+    if (itemType === "class") {
+      const selectedClass = classes.find((c) => c.id === itemId)
+      if (!selectedClass) return
+
+      const offsetX = (e.clientX - canvasRect.left) / scale - selectedClass.position.x
+      const offsetY = (e.clientY - canvasRect.top) / scale - selectedClass.position.y
+      setDragOffset({ x: offsetX, y: offsetY })
+    } else {
+      const selectedPackage = packages.find((p) => p.id === itemId)
+      if (!selectedPackage) return
+
+      const offsetX = (e.clientX - canvasRect.left) / scale - selectedPackage.position.x
+      const offsetY = (e.clientY - canvasRect.top) / scale - selectedPackage.position.y
+      setDragOffset({ x: offsetX, y: offsetY })
+    }
   }
 
-  // Handle mouse move for dragging classes
+  // Handle mouse move for dragging
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !selectedClassId || !canvasRef.current || isLocked) return
+    if (!isDragging || !canvasRef.current || isLocked) return
 
     e.preventDefault()
     const canvasRect = canvasRef.current.getBoundingClientRect()
     const x = Math.max(0, (e.clientX - canvasRect.left) / scale - dragOffset.x)
     const y = Math.max(0, (e.clientY - canvasRect.top) / scale - dragOffset.y)
 
-    setClasses(classes.map((c) => (c.id === selectedClassId ? { ...c, position: { x, y } } : c)))
-  }
-
-  // Handle mouse up to stop dragging
-  const handleMouseUp = () => {
-    setIsDragging(false)
-  }
-
-  // Export diagram to JSON
-  const exportToJson = () => {
-    const diagramData: DiagramData = {
-      classes,
-      relationships,
+    if (selectedClassId) {
+      setClasses(classes.map((c) => (c.id === selectedClassId ? { ...c, position: { x, y } } : c)))
+    } else if (selectedPackageId) {
+      setPackages(packages.map((p) => (p.id === selectedPackageId ? { ...p, position: { x, y } } : p)))
     }
+  }
 
-    const dataStr = JSON.stringify(diagramData, null, 2)
+  // Handle mouse up
+  const handleMouseUp = () => {
+    if (isDragging) {
+      setIsDragging(false)
+    }
+  }
+
+  // Export to new JSON format
+  const exportToNewFormat = () => {
+    const exportData: ExportProject[] = [
+      {
+        projectName,
+        package: packages.map((pkg) => {
+          const packageClasses = packageClassRelations
+            .filter((rel) => rel.packageId === pkg.id)
+            .map((rel) => classes.find((cls) => cls.id === rel.classId))
+            .filter(Boolean) as ClassNodeData[]
+
+          return {
+            packageName: pkg.name,
+            classes: packageClasses.map((cls) => ({
+              className: cls.name,
+              isEntity: cls.isEntity || true,
+              fields: cls.fields || [{ name: "id", type: "Long", isIdField: true, generationStrategy: "AUTO" }],
+              relationships: cls.relationships || [],
+            })),
+          } as ExportPackage
+        }),
+        class: classes.find((cls) => !packageClassRelations.some((rel) => rel.classId === cls.id))
+          ? {
+              className:
+                classes.filter((cls) => !packageClassRelations.some((rel) => rel.classId === cls.id))[0]?.name ||
+                "ClaseSuelta",
+              isEntity: false,
+              fields:
+                classes.filter((cls) => !packageClassRelations.some((rel) => rel.classId === cls.id))[0]?.fields || [],
+            }
+          : undefined,
+      },
+    ]
+
+    const dataStr = JSON.stringify(exportData, null, 2)
     const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr)
 
-    const exportFileDefaultName = `diagrama-clases-${new Date().toISOString().split("T")[0]}.json`
+    const exportFileDefaultName = `${projectName.replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}.json`
 
     const linkElement = document.createElement("a")
     linkElement.setAttribute("href", dataUri)
     linkElement.setAttribute("download", exportFileDefaultName)
     linkElement.click()
+
+    setShowExportDialog(false)
   }
 
   // Import diagram from JSON
@@ -222,9 +388,17 @@ export function SimpleDiagramEditor() {
         if (event.target?.result && typeof event.target.result === "string") {
           try {
             const diagramData: DiagramData = JSON.parse(event.target.result)
-            if (diagramData.classes && diagramData.relationships) {
+            if (diagramData.classes) {
               setClasses(diagramData.classes)
+            }
+            if (diagramData.packages) {
+              setPackages(diagramData.packages)
+            }
+            if (diagramData.relationships) {
               setRelationships(diagramData.relationships)
+            }
+            if (diagramData.packageClassRelations) {
+              setPackageClassRelations(diagramData.packageClassRelations)
             }
           } catch (error) {
             console.error("Error al importar el archivo JSON:", error)
@@ -241,30 +415,46 @@ export function SimpleDiagramEditor() {
 
     if (confirm("¿Estás seguro de que quieres limpiar todo el diagrama?")) {
       setClasses([])
+      setPackages([])
       setRelationships([])
+      setPackageClassRelations([])
       setSelectedClassId(null)
+      setSelectedPackageId(null)
       setSelectedRelationshipId(null)
+      setSelectedPackageClassId(null)
     }
   }
 
-  // Zoom in
-  const zoomIn = () => {
-    setScale((prevScale) => Math.min(prevScale + 0.1, 2))
-  }
-
-  // Zoom out
-  const zoomOut = () => {
-    setScale((prevScale) => Math.max(prevScale - 0.1, 0.5))
-  }
+  // Zoom functions
+  const zoomIn = () => setScale((prevScale) => Math.min(prevScale + 0.1, 2))
+  const zoomOut = () => setScale((prevScale) => Math.max(prevScale - 0.1, 0.5))
 
   // Toggle relation mode
   const toggleRelationMode = () => {
     if (isLocked) return
 
     setRelationMode(!relationMode)
+    setPackageClassMode(false)
     if (!relationMode) {
       setSelectedClassId(null)
+      setSelectedPackageId(null)
       setSelectedRelationshipId(null)
+      setSelectedPackageClassId(null)
+      setRelationSource(null)
+    }
+  }
+
+  // Toggle package-class mode
+  const togglePackageClassMode = () => {
+    if (isLocked) return
+
+    setPackageClassMode(!packageClassMode)
+    setRelationMode(false)
+    if (!packageClassMode) {
+      setSelectedClassId(null)
+      setSelectedPackageId(null)
+      setSelectedRelationshipId(null)
+      setSelectedPackageClassId(null)
       setRelationSource(null)
     }
   }
@@ -273,10 +463,12 @@ export function SimpleDiagramEditor() {
   const toggleLock = () => {
     setIsLocked(!isLocked)
     if (!isLocked) {
-      // When locking, clear selections and exit relation mode
       setSelectedClassId(null)
+      setSelectedPackageId(null)
       setSelectedRelationshipId(null)
+      setSelectedPackageClassId(null)
       setRelationMode(false)
+      setPackageClassMode(false)
       setRelationSource(null)
     }
   }
@@ -284,17 +476,23 @@ export function SimpleDiagramEditor() {
   // Set up event listeners
   useEffect(() => {
     const handleGlobalMouseUp = () => {
-      setIsDragging(false)
+      if (isDragging) {
+        setIsDragging(false)
+      }
     }
 
     const handleGlobalMouseMove = (e: MouseEvent) => {
-      if (!isDragging || !selectedClassId || !canvasRef.current || isLocked) return
+      if (!isDragging || !canvasRef.current || isLocked) return
 
       const canvasRect = canvasRef.current.getBoundingClientRect()
       const x = Math.max(0, (e.clientX - canvasRect.left) / scale - dragOffset.x)
       const y = Math.max(0, (e.clientY - canvasRect.top) / scale - dragOffset.y)
 
-      setClasses(classes.map((c) => (c.id === selectedClassId ? { ...c, position: { x, y } } : c)))
+      if (selectedClassId) {
+        setClasses(classes.map((c) => (c.id === selectedClassId ? { ...c, position: { x, y } } : c)))
+      } else if (selectedPackageId) {
+        setPackages(packages.map((p) => (p.id === selectedPackageId ? { ...p, position: { x, y } } : p)))
+      }
     }
 
     window.addEventListener("mouseup", handleGlobalMouseUp)
@@ -304,9 +502,9 @@ export function SimpleDiagramEditor() {
       window.removeEventListener("mouseup", handleGlobalMouseUp)
       window.removeEventListener("mousemove", handleGlobalMouseMove)
     }
-  }, [isDragging, selectedClassId, dragOffset, scale, classes, isLocked])
+  }, [isDragging, selectedClassId, selectedPackageId, dragOffset, scale, classes, packages, isLocked])
 
-  // Obtener nombres de las clases para el diálogo de relación
+  // Get class name for dialog
   const getClassName = (id: string) => {
     const classObj = classes.find((c) => c.id === id)
     return classObj ? classObj.name : "Clase"
@@ -314,7 +512,7 @@ export function SimpleDiagramEditor() {
 
   return (
     <div className="flex h-full">
-      <ClassNodeSidebar />
+      <PackageNodeSidebar />
 
       <div className="flex-grow h-full flex flex-col" ref={containerRef}>
         {/* Toolbar */}
@@ -342,6 +540,18 @@ export function SimpleDiagramEditor() {
               <MousePointer className="h-4 w-4" />
               {relationMode ? "Selecciona dos clases" : "Relación"}
             </Button>
+
+            <Button
+              variant={packageClassMode ? "default" : "outline"}
+              size="sm"
+              onClick={togglePackageClassMode}
+              className="flex items-center gap-1"
+              title={packageClassMode ? "Cancelar enlace" : "Enlazar paquete-clase"}
+              disabled={isLocked}
+            >
+              <Link className="h-4 w-4" />
+              {packageClassMode ? "Selecciona paquete y clase" : "Enlazar"}
+            </Button>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -356,7 +566,7 @@ export function SimpleDiagramEditor() {
 
           <div className="flex items-center space-x-2">
             <Button
-              onClick={exportToJson}
+              onClick={() => setShowExportDialog(true)}
               size="sm"
               className="flex items-center gap-1"
               title="Exportar diagrama a JSON"
@@ -420,6 +630,39 @@ export function SimpleDiagramEditor() {
               minHeight: "2000px",
             }}
           >
+            {/* Package nodes */}
+            {packages.map((packageData) => (
+              <div
+                key={packageData.id}
+                onMouseDown={(e) => handleMouseDown(e, packageData.id, "package")}
+                style={{ cursor: isLocked ? "not-allowed" : selectedPackageId === packageData.id ? "move" : "pointer" }}
+              >
+                <PackageNode
+                  data={packageData}
+                  isSelected={selectedPackageId === packageData.id}
+                  onSelect={handleSelectPackage}
+                  onUpdate={handleUpdatePackage}
+                  onDelete={handleDeletePackage}
+                  isLocked={isLocked}
+                  classCount={packageClassRelations.filter((rel) => rel.packageId === packageData.id).length}
+                />
+              </div>
+            ))}
+
+            {/* Package-Class lines */}
+            {packageClassRelations.map((relation) => (
+              <PackageClassLine
+                key={relation.id}
+                relation={relation}
+                classes={classes}
+                packages={packages}
+                onDelete={handleDeletePackageClassRelation}
+                isSelected={selectedPackageClassId === relation.id}
+                onSelect={handleSelectPackageClass}
+                isLocked={isLocked}
+              />
+            ))}
+
             {/* Relationship lines */}
             {relationships.map((relationship) => (
               <RelationshipLine
@@ -438,8 +681,11 @@ export function SimpleDiagramEditor() {
             {classes.map((classData) => (
               <div
                 key={classData.id}
-                onMouseDown={(e) => handleMouseDown(e, classData.id)}
-                style={{ cursor: isLocked ? "not-allowed" : selectedClassId === classData.id ? "move" : "pointer" }}
+                onMouseDown={(e) => handleMouseDown(e, classData.id, "class")}
+                style={{
+                  cursor: isLocked ? "not-allowed" : selectedClassId === classData.id ? "move" : "pointer",
+                  zIndex: 20,
+                }}
               >
                 <ClassNode
                   data={classData}
@@ -452,14 +698,19 @@ export function SimpleDiagramEditor() {
               </div>
             ))}
 
-            {/* Relation mode indicator */}
+            {/* Indicators */}
             {relationMode && relationSource && !isLocked && (
               <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-3 py-2 rounded-md shadow-lg z-50">
                 Selecciona la clase destino para crear la relación
               </div>
             )}
 
-            {/* Lock mode indicator */}
+            {packageClassMode && relationSource && !isLocked && (
+              <div className="fixed bottom-4 right-4 bg-green-600 text-white px-3 py-2 rounded-md shadow-lg z-50">
+                Selecciona {packages.find((p) => p.id === relationSource) ? "una clase" : "un paquete"} para enlazar
+              </div>
+            )}
+
             {isLocked && (
               <div className="fixed bottom-4 left-4 bg-red-600 text-white px-3 py-2 rounded-md shadow-lg z-50">
                 Modo bloqueado - No se pueden hacer cambios
@@ -468,7 +719,32 @@ export function SimpleDiagramEditor() {
           </div>
         </div>
 
-        {/* Diálogo para seleccionar tipo de relación */}
+        {/* Export Dialog */}
+        <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Exportar Proyecto</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <Label htmlFor="projectName">Nombre del Proyecto</Label>
+              <Input
+                id="projectName"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                className="mt-2"
+                placeholder="Ingresa el nombre del proyecto"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowExportDialog(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={exportToNewFormat}>Exportar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Relationship Dialog */}
         <Dialog open={showRelationDialog} onOpenChange={setShowRelationDialog}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>

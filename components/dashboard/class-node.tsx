@@ -4,9 +4,11 @@ import type React from "react"
 
 import { useState } from "react"
 import type { ClassNodeData } from "@/types/diagram-types"
-import { ChevronDown, ChevronUp, Edit, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Plus, Minus, Edit2, Trash2, Check, X } from "lucide-react"
 
 interface ClassNodeProps {
   data: ClassNodeData
@@ -19,53 +21,80 @@ interface ClassNodeProps {
 
 export function ClassNode({ data, isSelected, onSelect, onUpdate, onDelete, isLocked }: ClassNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
-  const [showAttributes, setShowAttributes] = useState(true)
-  const [showMethods, setShowMethods] = useState(true)
-  const [className, setClassName] = useState(data.name)
-  const [attributes, setAttributes] = useState(data.attributes)
-  const [methods, setMethods] = useState(data.methods)
+  const [editName, setEditName] = useState(data.name)
 
-  const handleSave = () => {
-    const updatedData = {
-      ...data,
-      name: className,
-      attributes,
-      methods,
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!isLocked) {
+      onSelect(data.id)
     }
-    onUpdate(updatedData)
+  }
+
+  const handleSaveName = () => {
+    if (!isLocked) {
+      onUpdate({ ...data, name: editName })
+      setIsEditing(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditName(data.name)
     setIsEditing(false)
   }
 
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!isLocked && confirm(`¿Estás seguro de que quieres eliminar la clase "${data.name}"?`)) {
+      onDelete(data.id)
+    }
+  }
+
+  const handleEntityChange = (checked: boolean) => {
+    if (!isLocked) {
+      onUpdate({ ...data, isEntity: checked })
+    }
+  }
+
   const addAttribute = () => {
-    setAttributes([...attributes, { name: "nuevo", type: "String", visibility: "public" }])
+    if (!isLocked) {
+      const newAttribute = { name: "nuevoAtributo", type: "String", visibility: "public" as const }
+      onUpdate({ ...data, attributes: [...data.attributes, newAttribute] })
+    }
   }
 
   const removeAttribute = (index: number) => {
-    const newAttributes = [...attributes]
-    newAttributes.splice(index, 1)
-    setAttributes(newAttributes)
+    if (!isLocked) {
+      const newAttributes = data.attributes.filter((_, i) => i !== index)
+      onUpdate({ ...data, attributes: newAttributes })
+    }
   }
 
   const updateAttribute = (index: number, field: string, value: string) => {
-    const newAttributes = [...attributes]
-    ;(newAttributes[index] as any)[field] = value
-    setAttributes(newAttributes)
+    if (!isLocked) {
+      const newAttributes = data.attributes.map((attr, i) => (i === index ? { ...attr, [field]: value } : attr))
+      onUpdate({ ...data, attributes: newAttributes })
+    }
   }
 
   const addMethod = () => {
-    setMethods([...methods, { name: "nuevo", returnType: "void", parameters: [], visibility: "public" }])
+    if (!isLocked) {
+      const newMethod = { name: "nuevoMetodo", returnType: "void", parameters: [], visibility: "public" as const }
+      onUpdate({ ...data, methods: [...data.methods, newMethod] })
+    }
   }
 
   const removeMethod = (index: number) => {
-    const newMethods = [...methods]
-    newMethods.splice(index, 1)
-    setMethods(newMethods)
+    if (!isLocked) {
+      const newMethods = data.methods.filter((_, i) => i !== index)
+      onUpdate({ ...data, methods: newMethods })
+    }
   }
 
   const updateMethod = (index: number, field: string, value: string) => {
-    const newMethods = [...methods]
-    ;(newMethods[index] as any)[field] = value
-    setMethods(newMethods)
+    if (!isLocked) {
+      const newMethods = data.methods.map((method, i) => (i === index ? { ...method, [field]: value } : method))
+      onUpdate({ ...data, methods: newMethods })
+    }
   }
 
   const getVisibilitySymbol = (visibility: string) => {
@@ -81,254 +110,197 @@ export function ClassNode({ data, isSelected, onSelect, onUpdate, onDelete, isLo
     }
   }
 
-  const handleNodeClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!isLocked) {
-      onSelect(data.id)
-    }
-  }
-
   return (
     <div
-      className={`absolute bg-white border-2 rounded shadow-lg min-w-[200px] max-w-[300px] cursor-move ${
-        isSelected ? "border-blue-500 ring-2 ring-blue-200" : "border-gray-300"
-      }`}
+      className={`absolute bg-white border-2 rounded-lg shadow-md min-w-[200px] ${
+        isSelected ? "border-blue-500 shadow-lg" : "border-gray-300"
+      } ${isLocked ? "cursor-not-allowed" : "cursor-pointer"}`}
       style={{
-        left: `${data.position.x}px`,
-        top: `${data.position.y}px`,
+        left: data.position.x,
+        top: data.position.y,
       }}
-      onClick={handleNodeClick}
+      onClick={handleClick}
     >
-      <div className="absolute -top-3 -left-3 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center cursor-grab"></div>
+      {/* Header */}
+      <div className="bg-blue-50 border-b border-gray-200 p-3 rounded-t-lg">
+        <div className="flex items-center justify-between mb-2">
+          {isEditing && !isLocked ? (
+            <div className="flex items-center gap-2 flex-1">
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="h-8 text-sm"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveName()
+                  if (e.key === "Escape") handleCancelEdit()
+                }}
+                autoFocus
+              />
+              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleSaveName}>
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleCancelEdit}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <h3 className="font-bold text-center flex-1">{data.name}</h3>
+              {isSelected && !isLocked && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setIsEditing(true)
+                    }}
+                  >
+                    <Edit2 className="h-3 w-3" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600" onClick={handleDelete}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
 
-      {/* Class Name */}
-      <div className="border-b p-2 bg-gray-100 font-bold text-center relative">
-        {isEditing ? (
-          <Input value={className} onChange={(e) => setClassName(e.target.value)} className="mb-1" />
-        ) : (
-          <div className="text-lg">{data.name}</div>
-        )}
-        {!isEditing && !isLocked && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-1 top-1 h-6 w-6"
-            onClick={(e) => {
-              e.stopPropagation()
-              setIsEditing(true)
-            }}
-          >
-            <Edit className="h-3 w-3" />
-          </Button>
-        )}
+        {/* Checkbox de entidad */}
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id={`entity-${data.id}`}
+            checked={data.isEntity || false}
+            onCheckedChange={handleEntityChange}
+            disabled={isLocked}
+          />
+          <label htmlFor={`entity-${data.id}`} className="text-sm font-medium">
+            Es Entidad
+          </label>
+        </div>
       </div>
 
       {/* Attributes */}
-      <div className="border-b">
-        <div
-          className="p-1 bg-gray-50 font-semibold flex justify-between cursor-pointer hover:bg-gray-100 transition-colors"
-          onClick={(e) => {
-            e.stopPropagation()
-            setShowAttributes(!showAttributes)
-          }}
-        >
-          <span className="text-sm">Atributos</span>
-          {showAttributes ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      <div className="p-3 border-b border-gray-200">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="font-semibold text-sm">Atributos</h4>
+          {isSelected && !isLocked && (
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={addAttribute}>
+              <Plus className="h-3 w-3" />
+            </Button>
+          )}
         </div>
-        {showAttributes && (
-          <div className="p-2">
-            {isEditing ? (
-              <div className="space-y-2">
-                {attributes.map((attr, index) => (
-                  <div key={index} className="flex items-center gap-1">
-                    <select
-                      value={attr.visibility}
-                      onChange={(e) => updateAttribute(index, "visibility", e.target.value)}
-                      className="w-20 px-2 py-1 border border-gray-300 rounded text-xs"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <option value="public">Público</option>
-                      <option value="private">Privado</option>
-                      <option value="protected">Protegido</option>
-                    </select>
-                    <Input
-                      value={attr.name}
-                      onChange={(e) => updateAttribute(index, "name", e.target.value)}
-                      className="flex-1 text-xs"
-                      placeholder="Nombre"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    <Input
-                      value={attr.type}
-                      onChange={(e) => updateAttribute(index, "type", e.target.value)}
-                      className="flex-1 text-xs"
-                      placeholder="Tipo"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        removeAttribute(index)
-                      }}
-                      className="h-6 w-6"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    addAttribute()
-                  }}
-                  className="w-full mt-1"
-                >
-                  <Plus className="h-3 w-3 mr-1" /> Añadir atributo
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-1 text-sm">
-                {attributes.length === 0 ? (
-                  <div className="text-gray-500 italic text-xs">Sin atributos</div>
-                ) : (
-                  attributes.map((attr, index) => (
-                    <div key={index} className="font-mono text-xs">
-                      {getVisibilitySymbol(attr.visibility)} {attr.name}: {attr.type}
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        )}
+        <div className="space-y-1">
+          {data.attributes.map((attr, index) => (
+            <div key={index} className="flex items-center gap-1 text-sm">
+              {isSelected && !isLocked ? (
+                <>
+                  <Select
+                    value={attr.visibility}
+                    onValueChange={(value) => updateAttribute(index, "visibility", value)}
+                  >
+                    <SelectTrigger className="w-16 h-6 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="public">+</SelectItem>
+                      <SelectItem value="private">-</SelectItem>
+                      <SelectItem value="protected">#</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    value={attr.name}
+                    onChange={(e) => updateAttribute(index, "name", e.target.value)}
+                    className="h-6 text-xs flex-1"
+                  />
+                  <span className="text-xs">:</span>
+                  <Input
+                    value={attr.type}
+                    onChange={(e) => updateAttribute(index, "type", e.target.value)}
+                    className="h-6 text-xs w-20"
+                  />
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6 text-red-600"
+                    onClick={() => removeAttribute(index)}
+                  >
+                    <Minus className="h-3 w-3" />
+                  </Button>
+                </>
+              ) : (
+                <span className="font-mono">
+                  {getVisibilitySymbol(attr.visibility)} {attr.name}: {attr.type}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Methods */}
-      <div>
-        <div
-          className="p-1 bg-gray-50 font-semibold flex justify-between cursor-pointer hover:bg-gray-100 transition-colors"
-          onClick={(e) => {
-            e.stopPropagation()
-            setShowMethods(!showMethods)
-          }}
-        >
-          <span className="text-sm">Métodos</span>
-          {showMethods ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      <div className="p-3">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="font-semibold text-sm">Métodos</h4>
+          {isSelected && !isLocked && (
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={addMethod}>
+              <Plus className="h-3 w-3" />
+            </Button>
+          )}
         </div>
-        {showMethods && (
-          <div className="p-2">
-            {isEditing ? (
-              <div className="space-y-2">
-                {methods.map((method, index) => (
-                  <div key={index} className="space-y-1">
-                    <div className="flex items-center gap-1">
-                      <select
-                        value={method.visibility}
-                        onChange={(e) => updateMethod(index, "visibility", e.target.value)}
-                        className="w-20 px-2 py-1 border border-gray-300 rounded text-xs"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <option value="public">Público</option>
-                        <option value="private">Privado</option>
-                        <option value="protected">Protegido</option>
-                      </select>
-                      <Input
-                        value={method.name}
-                        onChange={(e) => updateMethod(index, "name", e.target.value)}
-                        className="flex-1 text-xs"
-                        placeholder="Nombre"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      <Input
-                        value={method.returnType}
-                        onChange={(e) => updateMethod(index, "returnType", e.target.value)}
-                        className="flex-1 text-xs"
-                        placeholder="Retorno"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          removeMethod(index)
-                        }}
-                        className="h-6 w-6"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    addMethod()
-                  }}
-                  className="w-full mt-1"
-                >
-                  <Plus className="h-3 w-3 mr-1" /> Añadir método
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-1 text-sm">
-                {methods.length === 0 ? (
-                  <div className="text-gray-500 italic text-xs">Sin métodos</div>
-                ) : (
-                  methods.map((method, index) => (
-                    <div key={index} className="font-mono text-xs">
-                      {getVisibilitySymbol(method.visibility)} {method.name}(): {method.returnType}
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        )}
+        <div className="space-y-1">
+          {data.methods.map((method, index) => (
+            <div key={index} className="flex items-center gap-1 text-sm">
+              {isSelected && !isLocked ? (
+                <>
+                  <Select value={method.visibility} onValueChange={(value) => updateMethod(index, "visibility", value)}>
+                    <SelectTrigger className="w-16 h-6 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="public">+</SelectItem>
+                      <SelectItem value="private">-</SelectItem>
+                      <SelectItem value="protected">#</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    value={method.name}
+                    onChange={(e) => updateMethod(index, "name", e.target.value)}
+                    className="h-6 text-xs flex-1"
+                  />
+                  <span className="text-xs">:</span>
+                  <Input
+                    value={method.returnType}
+                    onChange={(e) => updateMethod(index, "returnType", e.target.value)}
+                    className="h-6 text-xs w-20"
+                  />
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6 text-red-600"
+                    onClick={() => removeMethod(index)}
+                  >
+                    <Minus className="h-3 w-3" />
+                  </Button>
+                </>
+              ) : (
+                <span className="font-mono">
+                  {getVisibilitySymbol(method.visibility)} {method.name}(): {method.returnType}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
-      {isEditing && (
-        <div className="p-2 border-t bg-gray-50 flex justify-end gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation()
-              setIsEditing(false)
-            }}
-          >
-            Cancelar
-          </Button>
-          <Button
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation()
-              handleSave()
-            }}
-          >
-            Guardar
-          </Button>
-        </div>
-      )}
+      {/* Selection indicator */}
+      {isSelected && <div className="absolute -top-2 -left-2 w-4 h-4 bg-blue-500 rounded-full border-2 border-white" />}
 
-      {isSelected && !isLocked && (
-        <Button
-          variant="destructive"
-          size="icon"
-          className="absolute -top-3 -right-3 h-6 w-6 rounded-full"
-          onClick={(e) => {
-            e.stopPropagation()
-            onDelete(data.id)
-          }}
-        >
-          <Trash2 className="h-3 w-3" />
-        </Button>
+      {/* Entity indicator */}
+      {data.isEntity && (
+        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border border-white" />
       )}
     </div>
   )

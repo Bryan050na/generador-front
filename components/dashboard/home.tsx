@@ -2,10 +2,10 @@
 import { useState } from "react"
 import Sidebar from "./sidebar"
 import Header from "./header"
-import { SimpleDiagramEditor } from "./simple-diagram-editor"
 import { ProjectsSection } from "./projects-section"
 import { SettingsSection } from "./settings-section"
 import { ProfileSection } from "./profile-section"
+import { EnhancedDiagramEditor } from "./enhanced-diagram-editor"
 
 export default function Home() {
   const [activeSection, setActiveSection] = useState("generate")
@@ -13,7 +13,7 @@ export default function Home() {
   const renderContent = () => {
     switch (activeSection) {
       case "generate":
-        return <SimpleDiagramEditor />
+        return <EnhancedDiagramEditor />
       case "projects":
         return <ProjectsSection />
       case "settings":
@@ -21,7 +21,7 @@ export default function Home() {
       case "profile":
         return <ProfileSection />
       default:
-        return <SimpleDiagramEditor />
+        return <EnhancedDiagramEditor />
     }
   }
 
