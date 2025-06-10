@@ -1,308 +1,208 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import React, { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { User, Lock, Calendar, MapPin, Edit, Save, X, Camera, Shield, Bell, Palette } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Save, Loader2, AlertCircle } from "lucide-react"
 
-interface UserProfile {
-  name: string
-  email: string
-  bio: string
-  location: string
-  occupation: string
-  joinDate: string
-  avatar: string
-  diagramsCreated: number
-  favoriteProjects: number
-}
+// Importamos la configuración de Firebase que ya tienes en tu proyecto
+import { auth, db } from "@/lib/firebase" 
+import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth"
+import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore"
 
 export function ProfileSection() {
-  const [isEditing, setIsEditing] = useState(false)
-  const [profile, setProfile] = useState<UserProfile>({
-    name: "Peter el Panda",
-    email: "peter.panda@diagramainador.com",
-    bio: "ola ando buscando un mentado dufenchmirtz si alguien sabe onta digame pa darle en la mauser",
-    location: "Area Limitrofe",
-    occupation: "Agente Secreto",
-    joinDate: "2024-01-01",
-    avatar: "",
-    diagramsCreated: 42,
-    favoriteProjects: 8,
-  })
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [profile, setProfile] = useState({
+    name: "",
+    username: "",
+  });
+  const [initials, setInitials] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [editedProfile, setEditedProfile] = useState(profile)
-  const [showPasswordChange, setShowPasswordChange] = useState(false)
-  const [passwords, setPasswords] = useState({
-    current: "",
-    new: "",
-    confirm: "",
-  })
+  // Carga los datos del perfil desde Firestore
+  const fetchProfile = useCallback(async (firebaseUser: FirebaseUser) => {
+    try {
+      const docRef = doc(db, "users", firebaseUser.uid);
+      const docSnap = await getDoc(docRef);
 
-  const handleSave = () => {
-    setProfile(editedProfile)
-    setIsEditing(false)
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setProfile({
+          name: data.name || firebaseUser.displayName || "",
+          username: data.username || "",
+        });
+      } else {
+        // Si no hay perfil, usamos datos de la autenticación si existen
+        setProfile({
+          name: firebaseUser.displayName || "Nuevo Usuario",
+          username: "",
+        });
+      }
+    } catch (err) {
+      console.error("Error al cargar el perfil:", err);
+      setError("No se pudo cargar el perfil. Inténtalo de nuevo.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Escucha cambios en la autenticación para saber qué usuario está logueado
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        // Escucha cambios en el perfil en tiempo real para mantener el estado actualizado
+        const unsubProfile = onSnapshot(doc(db, "users", currentUser.uid), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                setProfile({
+                    name: data.name || currentUser.displayName || "",
+                    username: data.username || "",
+                });
+            } else {
+                 setProfile({ name: currentUser.displayName || "Nuevo Usuario", username: "" });
+            }
+            setIsLoading(false);
+        });
+        return () => unsubProfile();
+      } else {
+        setUser(null);
+        setIsLoading(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+  
+  // Actualiza las iniciales para el avatar cuando cambia el nombre
+  useEffect(() => {
+      const nameToProcess = profile.name || user?.displayName || user?.email || "";
+      if (nameToProcess) {
+          const nameParts = nameToProcess.split(" ").filter(Boolean);
+          const initialsCalc = nameParts.length > 1
+              ? `${nameParts[0][0]}${nameParts[1][0]}`
+              : nameParts[0]?.substring(0, 2) || "U";
+          setInitials(initialsCalc.toUpperCase());
+      }
+  }, [profile.name, user]);
+
+
+  // Guarda los datos del perfil en Firestore
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      setError("Debes iniciar sesión para guardar.");
+      return;
+    }
+    setIsSaving(true);
+    setError(null);
+    try {
+      const userRef = doc(db, "users", user.uid);
+      // Creamos el objeto de datos a guardar, incluyendo el email
+      const dataToSave = {
+        name: profile.name,
+        username: profile.username,
+        email: user.email // Añadimos el email del usuario autenticado
+      };
+      await setDoc(userRef, dataToSave, { merge: true });
+      alert("¡Perfil guardado con éxito!");
+    } catch (err) {
+      console.error("Error al guardar el perfil:", err);
+      setError("No se pudo guardar el perfil. Inténtalo de nuevo.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-full p-6">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+      </div>
+    );
   }
 
-  const handleCancel = () => {
-    setEditedProfile(profile)
-    setIsEditing(false)
-  }
-
-  const handlePasswordChange = () => {
-    // Aquí iría la lógica para cambiar la contraseña
-    console.log("Cambiar contraseña:", passwords)
-    setPasswords({ current: "", new: "", confirm: "" })
-    setShowPasswordChange(false)
-    alert("Contraseña actualizada correctamente")
+  if (!user) {
+    return (
+        <div className="text-center p-10">
+            <h2 className="text-2xl font-semibold">Inicia sesión</h2>
+            <p className="text-gray-500">Debes iniciar sesión para ver y editar tu perfil.</p>
+        </div>
+    );
   }
 
   return (
-    <div className="h-full overflow-auto p-6">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Mi Perfil</h1>
-            <p className="text-gray-600">Gestiona tu información personal y configuración</p>
-          </div>
-          <Button onClick={() => (isEditing ? handleSave() : setIsEditing(true))} className="flex items-center gap-2">
-            {isEditing ? <Save className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
-            {isEditing ? "Guardar" : "Editar Perfil"}
-          </Button>
+    <div className="h-full overflow-auto p-6 bg-gray-50">
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">Mi Perfil</h1>
         </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Profile Card */}
-          <Card className="lg:col-span-1">
-            <CardHeader className="text-center">
-              <div className="relative mx-auto">
-                <Avatar className="h-24 w-24 mx-auto">
-                  <AvatarImage src={profile.avatar || "/placeholder.svg"} />
-                  <AvatarFallback className="text-2xl bg-blue-100 text-blue-600">
-                    {profile.name
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")}
-                  </AvatarFallback>
-                </Avatar>
-                {isEditing && (
-                  <Button size="icon" variant="outline" className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full">
-                    <Camera className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-              <CardTitle className="mt-4">{profile.name}</CardTitle>
-              <CardDescription>{profile.occupation}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <MapPin className="h-4 w-4" />
-                {profile.location}
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Calendar className="h-4 w-4" />
-                Miembro desde {new Date(profile.joinDate).toLocaleDateString("es-ES")}
-              </div>
-
-              <Separator />
-
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Diagramas creados</span>
-                  <Badge variant="secondary">{profile.diagramsCreated}</Badge>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Proyectos favoritos</span>
-                  <Badge variant="secondary">{profile.favoriteProjects}</Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Information Card */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Información Personal
-              </CardTitle>
-              <CardDescription>Actualiza tu información personal y biografía</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {isEditing && (
-                <div className="flex gap-2 mb-4">
-                  <Button onClick={handleSave} size="sm">
-                    <Save className="h-4 w-4 mr-1" />
-                    Guardar
-                  </Button>
-                  <Button onClick={handleCancel} variant="outline" size="sm">
-                    <X className="h-4 w-4 mr-1" />
-                    Cancelar
-                  </Button>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nombre completo</Label>
-                  <Input
-                    id="name"
-                    value={isEditing ? editedProfile.name : profile.name}
-                    onChange={(e) => setEditedProfile({ ...editedProfile, name: e.target.value })}
-                    disabled={!isEditing}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Correo electrónico</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={isEditing ? editedProfile.email : profile.email}
-                    onChange={(e) => setEditedProfile({ ...editedProfile, email: e.target.value })}
-                    disabled={!isEditing}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="location">Ubicación</Label>
-                  <Input
-                    id="location"
-                    value={isEditing ? editedProfile.location : profile.location}
-                    onChange={(e) => setEditedProfile({ ...editedProfile, location: e.target.value })}
-                    disabled={!isEditing}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="occupation">Ocupación</Label>
-                  <Input
-                    id="occupation"
-                    value={isEditing ? editedProfile.occupation : profile.occupation}
-                    onChange={(e) => setEditedProfile({ ...editedProfile, occupation: e.target.value })}
-                    disabled={!isEditing}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="bio">Biografía</Label>
-                <Textarea
-                  id="bio"
-                  value={isEditing ? editedProfile.bio : profile.bio}
-                  onChange={(e) => setEditedProfile({ ...editedProfile, bio: e.target.value })}
-                  disabled={!isEditing}
-                  rows={3}
-                  placeholder="Cuéntanos un poco sobre ti..."
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Security Card */}
-          <Card className="lg:col-span-3">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Seguridad y Privacidad
-              </CardTitle>
-              <CardDescription>Gestiona tu contraseña y configuración de seguridad</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Lock className="h-5 w-5 text-gray-500" />
-                  <div>
-                    <h4 className="font-medium">Contraseña</h4>
-                    <p className="text-sm text-gray-500">Última actualización hace 30 días</p>
-                  </div>
-                </div>
-                <Button variant="outline" onClick={() => setShowPasswordChange(!showPasswordChange)}>
-                  Cambiar contraseña
-                </Button>
-              </div>
-
-              {showPasswordChange && (
-                <Card className="border-blue-200 bg-blue-50">
-                  <CardContent className="pt-6">
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="current-password">Contraseña actual</Label>
+        
+        <Card>
+            <form onSubmit={handleSaveProfile}>
+                <CardHeader>
+                    <div className="flex items-center gap-6">
+                        <Avatar className="h-24 w-24">
+                            <AvatarImage src={user.photoURL || ""} alt={profile.name} />
+                            <AvatarFallback className="text-3xl bg-blue-100 text-blue-600">
+                               {initials}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div className="w-full">
+                            <CardTitle className="text-2xl">{profile.name || 'Sin Nombre'}</CardTitle>
+                            <CardDescription>{user.email}</CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-6 pt-6">
+                    <div className="space-y-2">
+                        <Label htmlFor="name">Nombre completo</Label>
                         <Input
-                          id="current-password"
-                          type="password"
-                          value={passwords.current}
-                          onChange={(e) => setPasswords({ ...passwords, current: e.target.value })}
+                            id="name"
+                            value={profile.name}
+                            onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                            placeholder="Tu nombre completo"
                         />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="new-password">Nueva contraseña</Label>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="username">Nombre de usuario</Label>
                         <Input
-                          id="new-password"
-                          type="password"
-                          value={passwords.new}
-                          onChange={(e) => setPasswords({ ...passwords, new: e.target.value })}
+                            id="username"
+                            value={profile.username}
+                            onChange={(e) => setProfile({ ...profile, username: e.target.value })}
+                            placeholder="Ej: peter_panda"
                         />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="confirm-password">Confirmar nueva contraseña</Label>
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="email">Correo electrónico</Label>
                         <Input
-                          id="confirm-password"
-                          type="password"
-                          value={passwords.confirm}
-                          onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })}
+                            id="email"
+                            type="email"
+                            value={user.email || ''}
+                            disabled
+                            className="bg-gray-100"
                         />
-                      </div>
-                      <div className="flex gap-2">
-                        <Button onClick={handlePasswordChange} size="sm">
-                          Actualizar contraseña
+                    </div>
+                    
+                    {error && (
+                        <div className="flex items-center text-red-600">
+                           <AlertCircle className="h-4 w-4 mr-2" /> {error}
+                        </div>
+                    )}
+                    
+                    <div className="flex justify-end">
+                        <Button type="submit" disabled={isSaving}>
+                            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                            {isSaving ? 'Guardando...' : 'Guardar Cambios'}
                         </Button>
-                        <Button variant="outline" onClick={() => setShowPasswordChange(false)} size="sm">
-                          Cancelar
-                        </Button>
-                      </div>
                     </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Bell className="h-5 w-5 text-gray-500" />
-                    <div>
-                      <h4 className="font-medium">Notificaciones</h4>
-                      <p className="text-sm text-gray-500">Gestionar preferencias</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    Configurar
-                  </Button>
-                </div>
-
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Palette className="h-5 w-5 text-gray-500" />
-                    <div>
-                      <h4 className="font-medium">Tema</h4>
-                      <p className="text-sm text-gray-500">Personalizar apariencia</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    Cambiar
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                </CardContent>
+            </form>
+        </Card>
       </div>
     </div>
   )

@@ -3,8 +3,9 @@ import Image from "next/image"
 import { LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useEffect, useState } from "react"
-import { onAuthStateChanged, signOut } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { onAuthStateChanged, signOut, User } from "firebase/auth"
+import { doc, onSnapshot } from "firebase/firestore"
+import { auth, db } from "@/lib/firebase" 
 import { useRouter } from "next/navigation"
 
 export default function Header() {
@@ -12,18 +13,44 @@ export default function Header() {
   const router = useRouter()
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    // Escucha cambios de autenticación
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser: User | null) => {
       if (currentUser) {
-        setUser({
-          email: currentUser.email,
-          displayName: currentUser.displayName || "Usuario sin nombre",
-        })
+        // El usuario está autenticado. Ahora, escucha cambios en su perfil de Firestore en tiempo real.
+        const docRef = doc(db, "users", currentUser.uid);
+        const unsubscribeProfile = onSnapshot(docRef, (docSnap) => {
+            let displayName = "Usuario sin nombre";
+            if (docSnap.exists() && docSnap.data().name) {
+              // Si el documento existe y tiene un nombre, lo usamos
+              displayName = docSnap.data().name;
+            } else if (currentUser.displayName) {
+              // Si no, usamos el displayName de la autenticación
+              displayName = currentUser.displayName;
+            }
+
+            setUser({
+              email: currentUser.email,
+              displayName: displayName,
+            });
+        }, (error) => {
+            console.error("Error al escuchar el perfil:", error);
+            // Si hay un error, al menos muestra el email
+            setUser({
+                email: currentUser.email,
+                displayName: currentUser.displayName || "Usuario sin nombre",
+            });
+        });
+
+        // Retornar la función para dejar de escuchar los cambios del perfil cuando el usuario se desloguea
+        return () => unsubscribeProfile();
+
       } else {
         setUser(null)
       }
     })
 
-    return () => unsubscribe()
+    // Retornar la función para dejar de escuchar los cambios de autenticación
+    return () => unsubscribeAuth()
   }, [])
 
   const handleLogout = async () => {
