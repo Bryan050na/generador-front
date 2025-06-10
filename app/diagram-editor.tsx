@@ -2,14 +2,14 @@
 
 import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ClassDiagramEditor } from "./diagrams/class-diagram/class-diagram-editor"
-import { SequenceDiagramEditor } from "./diagrams/sequence-diagram/sequence-diagram-editor"
-import { UseCaseDiagramEditor } from "./diagrams/usecase-diagram/use-case-diagram-editor"
-import { ComponentDiagramEditor } from "./diagrams/component-diagram/component-diagram-editor"
-import { PackageDiagramEditor } from "./diagrams/package-diagram/package-diagram-editor"
+import { EnhancedDiagramEditor } from "@/components/enhanced-diagram-editor"
+import { SequenceDiagramEditor } from "@/components/sequence-diagram-editor"
+import { UseCaseDiagramEditor } from "@/components/use-case-diagram-editor"
+import { ComponentDiagramEditor } from "@/components/component-diagram-editor"
+import { PackageDiagramEditor } from "@/components/package-diagram-editor"
 import { Box, ArrowRightLeft, Users, Puzzle, Package } from "lucide-react"
 
-export function EnhancedDiagramEditor() {
+export default function DiagramEditor() {
   const [activeTab, setActiveTab] = useState("class")
 
   return (
@@ -47,7 +47,7 @@ export function EnhancedDiagramEditor() {
 
         <div className="flex-grow overflow-hidden">
           <TabsContent value="class" className="h-full m-0 p-0 border-none">
-            <ClassDiagramEditor />
+            <EnhancedDiagramEditor />
           </TabsContent>
           <TabsContent value="sequence" className="h-full m-0 p-0 border-none">
             <SequenceDiagramEditor />
